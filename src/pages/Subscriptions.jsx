@@ -10,8 +10,10 @@ import {
   Layers,
   Building2,
   X,
+  Plus,
 } from 'lucide-react';
 import { subscriptions, planSummary } from '../data/mockData';
+import CreateSubscriptionModal from '../components/modals/CreateSubscriptionModal';
 
 const filterTabs = ['All', 'Active', 'Trial', 'Past Due', 'Cancelled'];
 
@@ -34,6 +36,7 @@ export default function Subscriptions() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   const notify = (msg) => {
     setToastMsg(msg);
@@ -70,11 +73,12 @@ export default function Subscriptions() {
             <span className="text-[18px]">▼</span>
           </button>
           <button
-            onClick={() => notify('New subscription form opened')}
-            className="px-4 md:px-5 py-2 bg-primary text-white rounded-lg font-label-md hover:bg-primary/90 transition-all flex items-center gap-2 text-sm"
+            onClick={() => setShowCreateModal(true)}
+            className="px-4 md:px-5 py-2 bg-primary text-white rounded-lg font-label-md hover:bg-primary/90 active:scale-[0.98] transition-all flex items-center gap-2 text-sm shadow-sm shadow-primary/25"
           >
-            <span className="text-[20px] font-bold">+</span>
-            <span className="hidden sm:inline">New Sub</span>
+            <Plus size={16} />
+            <span className="hidden sm:inline">New Subscription</span>
+            <span className="sm:hidden">New</span>
           </button>
         </div>
       </div>
@@ -213,6 +217,13 @@ export default function Subscriptions() {
           </div>
         </div>
       </div>
+
+      {/* Create Subscription Modal */}
+      <CreateSubscriptionModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={(msg) => notify(msg)}
+      />
 
       {/* Client Detail Drawer */}
       <div className={`fixed inset-0 z-[60] transition-opacity duration-300 ${drawerOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>

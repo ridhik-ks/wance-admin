@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   TrendingUp,
   Download,
@@ -14,13 +14,56 @@ import {
 } from 'lucide-react';
 import { messageStats, messageClients } from '../data/mockData';
 
+const CHART_W = 600;
+const CHART_H = 150;
+const PAD_Y   = 8;
+
+const CHART_DATA = {
+  Daily: {
+    inbound:  [30, 48, 42, 68, 75, 58, 85, 72, 65, 80, 92, 70],
+    outbound: [20, 34, 28, 50, 57, 40, 64, 54, 46, 60, 70, 52],
+    labels: ['W1', '', 'W2', '', 'W3', '', 'W4', '', 'W5', '', 'W6', ''],
+  },
+  Weekly: {
+    inbound:  [45, 62, 55, 78, 85, 68, 95],
+    outbound: [30, 44, 40, 58, 65, 50, 72],
+    labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5', 'Week 6', 'Week 7'],
+  },
+  Monthly: {
+    inbound:  [55, 48, 72, 65, 88, 95],
+    outbound: [40, 34, 54, 48, 66, 75],
+    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+  },
+};
+
+function makePaths(data) {
+  const n = data.length;
+  const max = Math.max(...data) * 1.12;
+  const stepX = CHART_W / (n - 1);
+
+  const pts = data.map((v, i) => ({
+    x: i * stepX,
+    y: PAD_Y + (CHART_H - PAD_Y * 2) * (1 - v / max),
+  }));
+
+  let line = `M ${pts[0].x},${pts[0].y}`;
+  for (let i = 1; i < pts.length; i++) {
+    const mid = (pts[i - 1].x + pts[i].x) / 2;
+    line += ` C ${mid},${pts[i - 1].y} ${mid},${pts[i].y} ${pts[i].x},${pts[i].y}`;
+  }
+
+  const area = `${line} L ${pts[pts.length - 1].x},${CHART_H} L 0,${CHART_H} Z`;
+  return { line, area, pts };
+}
+
 export default function Messages() {
-  const [timeRange, setTimeRange] = useState('Last 30 Days');
-  const [chartPeriod, setChartPeriod] = useState('Weekly');
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [timeRange, setTimeRange]       = useState('Last 30 Days');
+  const [chartPeriod, setChartPeriod]   = useState('Weekly');
+  const [drawerOpen, setDrawerOpen]     = useState(false);
   const [statusFilter, setStatusFilter] = useState('All Statuses');
-  const [showToast, setShowToast] = useState(false);
-  const [toastMsg, setToastMsg] = useState('');
+  const [showToast, setShowToast]       = useState(false);
+  const [toastMsg, setToastMsg]         = useState('');
+  const [chartAnimated, setChartAnimated] = useState(false);
 
   const notify = (msg) => {
     setToastMsg(msg);
@@ -28,47 +71,62 @@ export default function Messages() {
     setTimeout(() => setShowToast(false), 2000);
   };
 
+  // Trigger / re-trigger chart draw animation
+  useEffect(() => {
+    setChartAnimated(false);
+    const t = setTimeout(() => setChartAnimated(true), 60);
+    return () => clearTimeout(t);
+  }, [chartPeriod]);
+
+  const currentData = CHART_DATA[chartPeriod];
+
+  const { line: inboundLine, area: inboundArea } = useMemo(
+    () => makePaths(currentData.inbound),
+    [currentData]
+  );
+  const { line: outboundLine } = useMemo(
+    () => makePaths(currentData.outbound),
+    [currentData]
+  );
+
   const statIconMap = {
-    chat: <MessageCircle size={20} className="text-primary" />,
-    calendar: <Calendar size={20} className="text-secondary" />,
+    chat:      <MessageCircle size={20} className="text-primary" />,
+    calendar:  <Calendar size={20} className="text-secondary" />,
     analytics: <BarChart3 size={20} className="text-tertiary" />,
   };
 
   const statusBadgeClasses = {
-    Active: 'inline-flex items-center gap-2 bg-status-active-bg px-2.5 py-1 rounded-full border border-status-active/20',
-    'Low Credit': 'inline-flex items-center gap-2 bg-status-suspended-bg px-2.5 py-1 rounded-full border border-status-suspended/20',
-    Inactive: 'inline-flex items-center gap-2 bg-status-churned-bg px-2.5 py-1 rounded-full border border-status-churned/20',
+    Active:      'inline-flex items-center gap-2 bg-status-active-bg px-2.5 py-1 rounded-full border border-status-active/20',
+    'Low Credit':'inline-flex items-center gap-2 bg-status-suspended-bg px-2.5 py-1 rounded-full border border-status-suspended/20',
+    Inactive:    'inline-flex items-center gap-2 bg-status-churned-bg px-2.5 py-1 rounded-full border border-status-churned/20',
   };
-
   const statusDotClasses = {
-    Active: 'bg-status-active',
-    'Low Credit': 'bg-status-suspended',
-    Inactive: 'bg-status-churned',
+    Active:      'bg-status-active',
+    'Low Credit':'bg-status-suspended',
+    Inactive:    'bg-status-churned',
   };
-
   const statusTextClasses = {
-    Active: 'text-status-active',
-    'Low Credit': 'text-status-suspended',
-    Inactive: 'text-status-churned',
+    Active:      'text-status-active',
+    'Low Credit':'text-status-suspended',
+    Inactive:    'text-status-churned',
   };
-
   const planBadgeClasses = {
     Enterprise: 'bg-plan-enterprise text-white text-[10px] font-bold px-2 py-1 rounded tracking-wider uppercase',
-    Growth: 'bg-plan-growth/50 text-on-secondary-container text-[10px] font-bold px-2 py-1 rounded tracking-wider uppercase border border-outline-variant/20',
-    Pro: 'bg-plan-pro/50 text-on-secondary-container text-[10px] font-bold px-2 py-1 rounded tracking-wider uppercase border border-outline-variant/20',
-    Starter: 'bg-plan-starter/50 text-on-secondary-container text-[10px] font-bold px-2 py-1 rounded tracking-wider uppercase border border-outline-variant/20',
+    Growth:     'bg-plan-growth/50 text-on-secondary-container text-[10px] font-bold px-2 py-1 rounded tracking-wider uppercase border border-outline-variant/20',
+    Pro:        'bg-plan-pro/50 text-on-secondary-container text-[10px] font-bold px-2 py-1 rounded tracking-wider uppercase border border-outline-variant/20',
+    Starter:    'bg-plan-starter/50 text-on-secondary-container text-[10px] font-bold px-2 py-1 rounded tracking-wider uppercase border border-outline-variant/20',
   };
 
   return (
     <div className="px-4 md:px-page-padding-x flex-1 max-w-[1440px] mx-auto w-full py-6 md:py-8 space-y-6 md:space-y-gap-lg">
       {/* Toast */}
       {showToast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[70] bg-on-surface text-white px-4 py-2 rounded-lg shadow-lg text-sm font-medium">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[70] bg-on-surface text-white px-4 py-2 rounded-lg shadow-lg text-sm font-medium animate-fade-in-up">
           {toastMsg}
         </div>
       )}
 
-      {/* Header Section */}
+      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h2 className="font-headline-lg text-headline-lg text-on-surface">Messages</h2>
@@ -91,13 +149,13 @@ export default function Messages() {
         </div>
       </div>
 
-      {/* Row 1: Stat Cards */}
+      {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-gap-md">
         {messageStats.map((stat) => (
-          <div key={stat.label} className="bg-white p-5 md:p-6 rounded-xl border border-outline-variant/50 shadow-sm flex items-start justify-between">
+          <div key={stat.label} className="bg-white p-5 md:p-6 rounded-xl border border-outline-variant/50 shadow-sm flex items-start justify-between hover:shadow-md transition-shadow">
             <div>
               <p className="text-on-surface-variant text-label-md font-label-md uppercase tracking-wider text-xs">{stat.label}</p>
-              <h3 className="font-stat-value text-stat-value mt-2 tnum text-lg md:text-2xl">{stat.value}</h3>
+              <h3 className="font-stat-value mt-2 tnum text-lg md:text-2xl">{stat.value}</h3>
               <p className="text-status-active text-caption font-label-md mt-2 flex items-center gap-1">
                 <TrendingUp size={14} />
                 {stat.change}
@@ -110,7 +168,7 @@ export default function Messages() {
         ))}
       </div>
 
-      {/* Row 2: Messages Over Time Chart */}
+      {/* Messages Over Time Chart */}
       <div className="bg-white rounded-xl border border-outline-variant/50 shadow-sm overflow-hidden">
         <div className="p-4 md:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
@@ -120,11 +178,11 @@ export default function Messages() {
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-primary"></span>
+                <span className="w-2.5 h-2.5 rounded-full bg-primary"></span>
                 <span className="text-caption font-label-md">Inbound</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-primary-fixed-dim"></span>
+                <span className="w-2.5 h-2.5 rounded-full bg-primary-fixed-dim"></span>
                 <span className="text-caption font-label-md">Outbound</span>
               </div>
             </div>
@@ -143,26 +201,109 @@ export default function Messages() {
             </div>
           </div>
         </div>
-        <div className="px-4 md:px-6 pb-6 md:pb-8 h-[220px] md:h-[280px] relative flex items-end">
-          <div className="absolute inset-x-4 md:inset-x-6 top-4 bottom-6 md:bottom-8 border-b border-outline-variant/20">
-            <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="none">
+
+        {/* SVG chart */}
+        <div className="px-4 md:px-6 pb-8 md:pb-10">
+          <div className="relative">
+            <svg
+              viewBox={`0 0 ${CHART_W} ${CHART_H}`}
+              preserveAspectRatio="none"
+              className="w-full"
+              style={{ height: '200px' }}
+            >
               <defs>
-                <linearGradient id="chartGradient" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0%" stopColor="#0051df" stopOpacity="0.1" />
+                <linearGradient id="msgInboundGrad" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%"   stopColor="#0051df" stopOpacity="0.18" />
                   <stop offset="100%" stopColor="#0051df" stopOpacity="0" />
                 </linearGradient>
+                <linearGradient id="msgOutboundGrad" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%"   stopColor="#b5c4ff" stopOpacity="0.12" />
+                  <stop offset="100%" stopColor="#b5c4ff" stopOpacity="0" />
+                </linearGradient>
               </defs>
-              <path d="M0,150 Q150,120 300,180 T600,80 T900,140 T1200,60 V220 H0 Z" fill="url(#chartGradient)" />
-              <path d="M0,150 Q150,120 300,180 T600,80 T900,140 T1200,60" fill="none" stroke="#0051df" strokeLinecap="round" strokeWidth="2" />
+
+              {/* Horizontal gridlines */}
+              {[0.25, 0.5, 0.75].map((f) => (
+                <line
+                  key={f}
+                  x1="0" x2={CHART_W}
+                  y1={PAD_Y + (CHART_H - PAD_Y * 2) * f}
+                  y2={PAD_Y + (CHART_H - PAD_Y * 2) * f}
+                  stroke="#c3c5d8"
+                  strokeWidth="0.6"
+                  strokeDasharray="4 6"
+                  opacity="0.5"
+                />
+              ))}
+
+              {/* Outbound area & line */}
+              <path
+                d={outboundLine.replace('M', 'M') + ` L ${CHART_W},${CHART_H} L 0,${CHART_H} Z`}
+                fill="url(#msgOutboundGrad)"
+                style={{ opacity: chartAnimated ? 1 : 0, transition: chartAnimated ? 'opacity 0.6s ease-out 0.4s' : 'none' }}
+              />
+              <path
+                d={outboundLine}
+                fill="none"
+                stroke="#b5c4ff"
+                strokeWidth="2"
+                strokeLinecap="round"
+                pathLength="1"
+                style={{
+                  strokeDasharray: 1,
+                  strokeDashoffset: chartAnimated ? 0 : 1,
+                  transition: chartAnimated ? 'stroke-dashoffset 1.3s cubic-bezier(0.4,0,0.2,1) 0.25s' : 'none',
+                }}
+              />
+
+              {/* Inbound area & line */}
+              <path
+                d={inboundArea}
+                fill="url(#msgInboundGrad)"
+                style={{ opacity: chartAnimated ? 1 : 0, transition: chartAnimated ? 'opacity 0.6s ease-out 0.2s' : 'none' }}
+              />
+              <path
+                d={inboundLine}
+                fill="none"
+                stroke="#0051df"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                pathLength="1"
+                style={{
+                  strokeDasharray: 1,
+                  strokeDashoffset: chartAnimated ? 0 : 1,
+                  transition: chartAnimated ? 'stroke-dashoffset 1.4s cubic-bezier(0.4,0,0.2,1) 0.1s' : 'none',
+                }}
+              />
+
+              {/* Data point dots on inbound */}
+              {makePaths(currentData.inbound).pts.map((pt, i) => (
+                <circle
+                  key={i}
+                  cx={pt.x} cy={pt.y} r="3.5"
+                  fill="#0051df"
+                  style={{
+                    opacity: chartAnimated ? 1 : 0,
+                    transition: chartAnimated ? `opacity 0.2s ease-out ${0.1 + i * 0.07}s` : 'none',
+                  }}
+                />
+              ))}
             </svg>
-            <div className="absolute -bottom-8 inset-x-0 flex justify-between text-caption text-on-surface-variant font-label-md opacity-70 text-[10px] md:text-xs">
-              <span>Week 1</span><span className="hidden sm:inline">Week 2</span><span>Week 3</span><span className="hidden sm:inline">Week 4</span><span>Week 5</span><span className="hidden sm:inline">Week 6</span>
+
+            {/* X-axis labels */}
+            <div className="mt-3 flex justify-between text-on-surface-variant/60 text-[10px] md:text-xs font-label-md">
+              {currentData.labels.filter((_, i) => {
+                if (currentData.labels.length <= 7) return true;
+                return i % 2 === 0;
+              }).map((lbl, i) => (
+                <span key={i}>{lbl}</span>
+              ))}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Row 3: Client Breakdown Table */}
+      {/* Client Breakdown Table */}
       <div className="bg-white rounded-xl border border-outline-variant/50 shadow-sm overflow-hidden">
         <div className="px-4 md:px-6 py-4 md:py-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-outline-variant/20">
           <div className="flex items-center gap-3">
